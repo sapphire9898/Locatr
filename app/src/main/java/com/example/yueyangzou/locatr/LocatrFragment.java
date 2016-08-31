@@ -24,6 +24,13 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 
 import java.io.IOException;
 import java.util.List;
@@ -31,10 +38,16 @@ import java.util.List;
 /**
  * Created by yueyangzou on 16/8/29.
  */
-public class LocatrFragment extends Fragment {
+public class LocatrFragment extends SupportMapFragment {
     private static final String TAG = "LocatrFragment";
-    private ImageView mImageView;
     private GoogleApiClient mClient;
+
+    private GoogleMap mMap;
+
+    private Bitmap mMapImage;
+    private GalleryItem mMapItem;
+    private Location mCurrentLocation;
+
 
 
     public static LocatrFragment newInstance() {
@@ -59,13 +72,15 @@ public class LocatrFragment extends Fragment {
                     }
                 })
                 .build();
+        getMapAsync(new OnMapReadyCallback() {
+            @Override
+            public void onMapReady(GoogleMap googleMap) {
+                mMap = googleMap;
+                updateUI();
+            }
+        });
     }
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.fragment_locatr, container, false);
-        mImageView = (ImageView) v.findViewById(R.id.image);
-        return v;
-    }
+
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
@@ -106,14 +121,32 @@ public class LocatrFragment extends Fragment {
                     }
                 });
     }
+    private void updateUI() {
+        if (mMap == null || mMapImage == null) {
+            return;
+        }
+        LatLng itemPoint = new LatLng(mMapItem.getLat(), mMapItem.getLon());
+        LatLng myPoint = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
+
+        LatLngBounds bounds = new LatLngBounds.Builder()
+                .include(itemPoint)
+                .include(myPoint)
+                .build();
+
+        int margin = getResources().getDimensionPixelSize(R.dimen.map_inset_margin);
+        CameraUpdate update = CameraUpdateFactory.newLatLngBounds(bounds, margin);
+        mMap.animateCamera(update);
+    }
 
     private class SearchTask extends AsyncTask<Location, Void, Void> {
         private GalleryItem mGalleryItem;
         private Bitmap mBitmap;
+        private Location mLocation;
 
 
         @Override
         protected Void doInBackground(Location... params) {
+            mLocation = params[0];
             FlickrFetchr fetchr = new FlickrFetchr();
             List<GalleryItem> items = fetchr.searchPhotos(params[0]);
 
@@ -123,6 +156,8 @@ public class LocatrFragment extends Fragment {
             mGalleryItem = items.get(0);
             try {
                 byte[] bytes = fetchr.getUrlBytes(mGalleryItem.getUrl());
+                Log.i(TAG, "we have get the image from " + mGalleryItem.getUrl());
+
                 mBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
             } catch (IOException ioe) {
                 Log.i(TAG, "Unable to download bitmap", ioe);
@@ -130,6 +165,15 @@ public class LocatrFragment extends Fragment {
 
             return null;
         }
+
+        @Override
+        protected void onPostExecute(Void result) {
+            mMapImage = mBitmap;
+            mMapItem = mGalleryItem;
+            mCurrentLocation = mLocation;
+            updateUI();
+        }
+
     }
 
     @Override
